@@ -14,7 +14,12 @@ from pathlib import Path
 from . import claude, codex, unit
 from .core import AGENTS, Ctx, Fail, Tally, fstype, is_empty_dir, require_run_dir, say
 
-DROPIN = Path("/etc/systemd/logind.conf.d/50-ramdisk-ai.conf")
+DROPIN = Path("/etc/systemd/logind.conf.d/50-ramdisk.conf")
+LEGACY_DROPIN = DROPIN.with_name("50-ramdisk-ai.conf")  # earlier name
+
+
+def _dropins() -> list[Path]:
+    return [d for d in (DROPIN, LEGACY_DROPIN) if d.is_file()]
 
 
 def codex_home_for_login(ctx: Ctx) -> Path:
@@ -72,12 +77,14 @@ def status(ctx: Ctx) -> None:
         say(f"OK   {ctx.run_dir} is tmpfs: {size}M total, {used}M used ({pct}%), {avail}M free")
         if pct >= 80:
             say(f"WARN tmpfs is {pct}% full -- writes fail with ENOSPC when it fills; purge old")
-            say(f"     transcripts under {ctx.root}, or ./ramdisk.py size <bigger>")
-    if DROPIN.is_file():
-        lines = [l for l in DROPIN.read_text().splitlines() if l.startswith("RuntimeDirectorySize")]
-        say(f"INFO size configured in {DROPIN}: {lines[0] if lines else '?'}")
-    else:
+            say(f"     transcripts under {ctx.root}, or ramdisk size <bigger>")
+    for d in _dropins():
+        lines = [l for l in d.read_text().splitlines() if l.startswith("RuntimeDirectorySize")]
+        say(f"INFO size configured in {d}: {lines[0] if lines else '?'}")
+    if not _dropins():
         say("INFO size: logind default (RuntimeDirectorySize=10%)")
+    if LEGACY_DROPIN.is_file():
+        say(f"WARN old drop-in name -- rerun `ramdisk size <S>` (it replaces {LEGACY_DROPIN.name})")
     if ctx.root.is_dir():
         say(f"OK   ramdisk root {ctx.root} exists ({_human(_disk_usage(ctx.root))})")
     else:
@@ -89,7 +96,7 @@ def status(ctx: Ctx) -> None:
     else:
         say("INFO login unit not installed (fine: no agent is on)")
     for a in AGENTS:
-        say(f"ON   {a}  (details: ./ramdisk.py {a} check)" if ctx.enabled(a) else f"OFF  {a}")
+        say(f"ON   {a}  (details: ramdisk {a} check)" if ctx.enabled(a) else f"OFF  {a}")
     if ctx.n.fail:
         raise Fail()
 
@@ -99,7 +106,7 @@ def on(ctx: Ctx) -> None:
     ctx.mkdir(ctx.root, private=True)
     say(f"OK   ramdisk root: {ctx.root}")
     unit.install(ctx)
-    say("next: ./ramdisk.py claude on   and/or   ./ramdisk.py codex on")
+    say("next: ramdisk claude on   and/or   ramdisk codex on")
 
 
 def login(ctx: Ctx) -> None:
@@ -138,22 +145,24 @@ def off(ctx: Ctx) -> None:
         else:
             left = " ".join(sorted(p.name for p in ctx.root.iterdir()))
             say(f"WARN {ctx.root} is not empty (left by hand?) -- not removed: {left}")
-    if DROPIN.is_file():
-        say("INFO size drop-in kept; './ramdisk.py size default' removes it")
+    if _dropins():
+        say("INFO size drop-in kept; 'ramdisk size default' removes it")
 
 
 def set_size(ctx: Ctx, size: str | None) -> None:
     if size == "default":
-        if DROPIN.is_file():
-            ctx.run("sudo", "rm", "-f", DROPIN)
+        for d in _dropins():
+            ctx.run("sudo", "rm", "-f", d)
         value = "10%"
     elif size and re.fullmatch(r"\d+%|\d+[KMG]", size):
         value = size
         ctx.run("sudo", "mkdir", "-p", DROPIN.parent)
-        text = f"# written by {Path(__file__).resolve()}\n[Login]\nRuntimeDirectorySize={value}\n"
+        text = f"# written by `ramdisk size`\n[Login]\nRuntimeDirectorySize={value}\n"
         ctx.run("sudo", "tee", DROPIN, input=text)
+        if LEGACY_DROPIN.is_file():
+            ctx.run("sudo", "rm", "-f", LEGACY_DROPIN)
     else:
-        raise Fail("usage: ramdisk.py size <10%|4G|4096M|default>", code=2)
+        raise Fail("usage: ramdisk size <10%|4G|4096M|default>", code=2)
     # logind reads the drop-in at the next login; remount so the change is live now as well.
     # Shrinking below what is in use fails, which leaves the old size in place -- harmless.
     if ctx.run("sudo", "mount", "-o", f"remount,size={value}", ctx.run_dir, check=False):

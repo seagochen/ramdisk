@@ -16,7 +16,6 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-PROJECT = Path(__file__).resolve().parent.parent
 AGENTS = ("claude", "codex")
 
 
@@ -57,7 +56,7 @@ class Ctx:
         env = os.environ if environ is None else environ
         home = Path(env.get("HOME") or Path.home())
         run_dir = Path(env.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}")
-        state = Path(env.get("XDG_STATE_HOME") or home / ".local/state") / "ramdisk-ai"
+        state = Path(env.get("XDG_STATE_HOME") or home / ".local/state") / "ramdisk"
         config = Path(env.get("XDG_CONFIG_HOME") or home / ".config")
         unit_dst = config / "systemd/user" / "ramdisk-dirs.service"
         return cls(home=home, run_dir=run_dir, state_dir=state, unit_dst=unit_dst, **options)

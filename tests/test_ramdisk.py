@@ -14,7 +14,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from ramdisk_ai import cli, codex, core  # noqa: E402
+from ramdisk import cli, codex, core, unit  # noqa: E402
 
 # systemctl stand-in: records calls; `cat` succeeds when the unit file is installed,
 # `is-enabled` after `reenable`, `is-failed` never.
@@ -74,7 +74,7 @@ class Sandbox(unittest.TestCase):
         os.environ.pop("INVOCATION_ID", None)
         os.environ.pop("CODEX_HOME", None)
         self.root = self.run_dir / "ramdisk"
-        self.state = t / "state" / "ramdisk-ai"
+        self.state = t / "state" / "ramdisk"
 
     def tearDown(self):
         self._tmp.cleanup()
@@ -176,7 +176,7 @@ class CodexConfigTest(unittest.TestCase):
         self.assertEqual(parsed["sqlite_home"], self.S)
 
     def test_legacy_marker_recognized(self):
-        old = f'{codex.BEGIN_LEGACY}\nsqlite_home = "{self.S}"\nlog_dir = "{self.L}"\n{codex.END}\nmodel = "x"\n'
+        old = f'{codex.LEGACY_BEGINS[1]}\nsqlite_home = "{self.S}"\nlog_dir = "{self.L}"\n{codex.LEGACY_ENDS[0]}\nmodel = "x"\n'
         base, result, present, _ = codex.prepare(old, self.S, self.L)
         self.assertTrue(present)
         self.assertEqual(base, 'model = "x"\n')
@@ -194,6 +194,22 @@ class CodexConfigTest(unittest.TestCase):
         text = f'{codex.BEGIN}\nsqlite_home = "a"\nlog_dir = "b"\nmodel = "x"\n{codex.END}\n'
         with self.assertRaisesRegex(ValueError, "unexpected settings"):
             codex.prepare(text, self.S, self.L)
+
+
+class UnitTest(Sandbox):
+    def test_render_runs_this_package_with_given_interpreter(self):
+        text = unit.render("/opt/my env/bin/python3")
+        self.assertIn('ExecStart="/opt/my env/bin/python3" -m ramdisk login', text)
+        self.assertIn(f"WorkingDirectory={unit.PACKAGE_DIR.parent}", text)
+        self.assertIn(f"ConditionPathExists={unit.PACKAGE_DIR / '__main__.py'}", text)
+
+    def test_install_is_idempotent_and_refreshes_stale_copy(self):
+        code, out = self.cmd("install-unit")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.cmd("install-unit")[1].strip(), "OK   login unit up to date and enabled")
+        (self.t / "config/systemd/user/ramdisk-dirs.service").write_text("stale")
+        code, out = self.cmd("install-unit")
+        self.assertIn("NEW  login unit installed/refreshed", out)
 
 
 class CodexTest(Sandbox):

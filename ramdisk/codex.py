@@ -46,9 +46,14 @@ MAP = (
     ("codex-tui-thread-reference-capabilities", "tui-thread-reference-capabilities"),
 )
 
-BEGIN = "# >>> ramdisk-ai (managed by ramdisk.py -- do not edit) >>>"
-BEGIN_LEGACY = "# >>> ramdisk-ai (managed by codex_ramdisk.sh -- do not edit) >>>"
-END = "# <<< ramdisk-ai <<<"
+BEGIN = "# >>> ramdisk (managed by the ramdisk command -- do not edit) >>>"
+END = "# <<< ramdisk <<<"
+# Markers written by earlier versions; still recognized so their blocks can be replaced/removed.
+LEGACY_BEGINS = (
+    "# >>> ramdisk-ai (managed by ramdisk.py -- do not edit) >>>",
+    "# >>> ramdisk-ai (managed by codex_ramdisk.sh -- do not edit) >>>",
+)
+LEGACY_ENDS = ("# <<< ramdisk-ai <<<",)
 KEYS = {"sqlite_home", "log_dir"}
 
 
@@ -74,7 +79,7 @@ class Codex:
 # --- config.toml managed block ----------------------------------------------------------------
 
 def _is_begin(line: str) -> bool:
-    return line.rstrip("\r\n") in (BEGIN, BEGIN_LEGACY)
+    return line.rstrip("\r\n") in (BEGIN, *LEGACY_BEGINS)
 
 
 def prepare(text: str, sqlite: str, log: str) -> tuple[str, str, bool, dict]:
@@ -82,7 +87,7 @@ def prepare(text: str, sqlite: str, log: str) -> tuple[str, str, bool, dict]:
     parsed full text). Never silently overrides user settings: raises ValueError instead."""
     lines = text.splitlines(keepends=True)
     starts = [i for i, line in enumerate(lines) if _is_begin(line)]
-    ends = [i for i, line in enumerate(lines) if line.rstrip("\r\n") == END]
+    ends = [i for i, line in enumerate(lines) if line.rstrip("\r\n") in (END, *LEGACY_ENDS)]
     if starts or ends:
         if len(starts) != 1 or len(ends) != 1 or starts[0] != 0 or ends[0] <= starts[0]:
             raise ValueError("malformed managed block; repair config.toml manually")
@@ -246,7 +251,7 @@ def off(ctx: Ctx, home: Path) -> None:
     n = ctx.n
     say()
     say(f"restored: {n.new}   already on disk: {n.ok}   skipped: {n.skip}")
-    say("(the login unit stays for other agents; ./ramdisk.py off removes everything)")
+    say("(the login unit stays for other agents; ramdisk off removes everything)")
 
 
 def check(ctx: Ctx, home: Path) -> None:
@@ -258,7 +263,7 @@ def check(ctx: Ctx, home: Path) -> None:
         say(str(failure))
         ctx.n.fail += 1
     if not ctx.enabled(AGENT):
-        say("INFO codex is not switched on (./ramdisk.py codex on)")
+        say("INFO codex is not switched on (ramdisk codex on)")
     for name, target in cx.entries():
         check_one(ctx, name, target)
     _config_check(cx)
@@ -279,7 +284,7 @@ def run(ctx: Ctx, home: Path, args: list[str]) -> None:
     for name, target in cx.entries():
         check_one(ctx, name, target)
     if ctx.n.fail:
-        raise Fail(f"FAIL setup incomplete ({ctx.n.fail} problem(s)) -- ./ramdisk.py codex check")
+        raise Fail(f"FAIL setup incomplete ({ctx.n.fail} problem(s)) -- ramdisk codex check")
     ctx.mkdir(cx.process_tmp, private=True)
     tmp = str(cx.process_tmp)
     env = dict(os.environ, TMPDIR=tmp, TMP=tmp, TEMP=tmp)

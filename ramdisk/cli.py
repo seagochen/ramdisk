@@ -1,13 +1,13 @@
-"""Command line: ramdisk.py <command> [--dry-run] [--force]."""
+"""Command line: ramdisk <command> [--dry-run] [--force]."""
 from __future__ import annotations
 
 import sys
 
-from . import claude, codex, system, unit
+from . import __version__, claude, codex, system, unit
 from .core import Ctx, Fail, say
 
 USAGE = """\
-usage: ramdisk.py <command> [--dry-run] [--force]
+usage: ramdisk <command> [--dry-run] [--force]
 
 the ramdisk itself
   status                    tmpfs size/usage, login unit, which agents are on (default)
@@ -26,6 +26,7 @@ agents
 options
   --dry-run                 print what would change, change nothing
   --force                   skip the "agent is running" guard
+  --version                 print the version
 """
 
 SYSTEM = {"status": system.status, "on": system.on, "off": system.off,
@@ -49,6 +50,9 @@ def dispatch(argv: list[str]) -> None:
             dry = True
         elif a == "--force":
             force = True
+        elif a == "--version":
+            say(f"ramdisk {__version__}")
+            return
         elif a in ("-h", "--help", "help"):
             say(USAGE.rstrip())
             return

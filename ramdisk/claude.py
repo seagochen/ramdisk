@@ -80,13 +80,13 @@ def off(ctx: Ctx) -> None:
     n = ctx.n
     say()
     say(f"restored: {n.new}   already on disk: {n.ok}   skipped: {n.skip}")
-    say("(the login unit stays for other agents; ./ramdisk.py off removes everything)")
+    say("(the login unit stays for other agents; ramdisk off removes everything)")
 
 
 def check(ctx: Ctx) -> None:
     say(f"ramdisk root: {ctx.root}")
     if not ctx.enabled(AGENT):
-        say("INFO claude is not switched on (./ramdisk.py claude on)")
+        say("INFO claude is not switched on (ramdisk claude on)")
     for name, target in _entries(ctx):
         check_one(ctx, name, target)
     unit.check(ctx)
