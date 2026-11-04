@@ -32,7 +32,8 @@ dependencies); the Codex part needs Codex CLI 0.166+. No installation: run it fr
 
 ```bash
 git clone <this repo> ~/projects/ramdisk
-echo "alias ramdisk='PYTHONPATH=$HOME/projects/ramdisk python3 -m ramdisk'" >> ~/.bashrc
+cd ~/projects/ramdisk && ./ramdisk.sh --version
+ln -s "$PWD/ramdisk.sh" ~/.local/bin/ramdisk     # optional: `ramdisk` from anywhere
 ```
 
 The login unit records the interpreter and checkout location it was installed from. After
